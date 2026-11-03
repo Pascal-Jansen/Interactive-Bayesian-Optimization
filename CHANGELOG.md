@@ -9,6 +9,8 @@ Release notes for versions before 1.5.0 are available on the [GitHub releases pa
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-03
+
 ### Changed
 - Repository links use the new name `Interactive-Bayesian-Optimization` (#28). GitHub still redirects the old `Bayesian-Optimization-for-Unity` URLs. The `$id` of `protocol/ibo-protocol-v1.schema.json` keeps the old URL because it identifies protocol v1.
 - `CITATION.cff`, the README and the Unity manual cite the Zenodo concept DOI [10.5281/zenodo.16849778](https://doi.org/10.5281/zenodo.16849778) (#29). It covers all versions and resolves to the latest release. The previously cited DOI, 10.5281/zenodo.19786494, is the record of v1.4.0.

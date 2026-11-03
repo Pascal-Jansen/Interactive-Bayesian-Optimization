@@ -19,7 +19,7 @@ from .client import (
 )
 from .server import ServerProcess, default_backend_dir, launch_server
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 __all__ = [
     "DEFAULT_HOST", "DEFAULT_PORT", "PROTOCOL_VERSION", "Design", "IboClient", "Objective", "Parameter",
