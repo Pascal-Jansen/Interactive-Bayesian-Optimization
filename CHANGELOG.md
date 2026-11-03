@@ -9,6 +9,14 @@ Release notes for versions before 1.5.0 are available on the [GitHub releases pa
 
 ## [Unreleased]
 
+### Changed
+- Repository links use the new name `Interactive-Bayesian-Optimization` (#28). GitHub still redirects the old `Bayesian-Optimization-for-Unity` URLs. The `$id` of `protocol/ibo-protocol-v1.schema.json` keeps the old URL because it identifies protocol v1.
+- `CITATION.cff`, the README and the Unity manual cite the Zenodo concept DOI [10.5281/zenodo.16849778](https://doi.org/10.5281/zenodo.16849778) (#29). It covers all versions and resolves to the latest release. The previously cited DOI, 10.5281/zenodo.19786494, is the record of v1.4.0.
+- The README Features section describes design parameters, objectives and budget, the feedback types, each optimization method, study features, the logged data and the limits of iBO. The front-end table has icons, the publication table links the venues, and the overview figure, logo and role animations are updated. `tools/readme_figures` regenerates them.
+
+### Fixed
+- The README picks the light or dark logo and figures by GitHub's theme setting (`#gh-light-mode-only`, `#gh-dark-mode-only`). With GitHub set to light and the system set to dark, the white page showed the dark versions.
+
 ## [2.0.0] - 2026-10-29
 
 ### Renamed

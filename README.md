@@ -214,7 +214,7 @@ shows which one fits your study.
 
 ## Status
 
-Version 2.0.0. There was no iBO 1.x: the numbering continues that of Bayesian Optimization for Unity (1.0 to
+Version 2.0.1. There was no iBO 1.x: the numbering continues that of Bayesian Optimization for Unity (1.0 to
 1.9.1).
 
 - Windows: [Bayesian-Optimization-for-Game-Engines](https://github.com/M-Colley/Bayesian-Optimization-for-Game-Engines),
