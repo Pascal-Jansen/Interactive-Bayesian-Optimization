@@ -105,7 +105,7 @@ jobs:
     # The Python client (Python/) is standard library only and supports Python 3.9+, for example
     # inside PsychoPy; the backend needs Python 3.13 and is tested above.
     name: Python client on Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
 
     strategy:
