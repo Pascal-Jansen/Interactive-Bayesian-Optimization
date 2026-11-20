@@ -13,8 +13,8 @@ from bo_protocol import (
     SOCKET_ACCEPT_TIMEOUT_SEC, SOCKET_TIMEOUT_SEC, StopRequested,
     accept_unity_connection, append_csv_rows, close_connection, configure_listener_socket,
     flush_pending_logs, get_cfg_bool, get_cfg_int, get_unique_folder, log_exists, parse_obj_init,
-    parse_param_init, parse_user_ids, read_observation_log, receive_init_message,
-    recv_objectives_blocking, send_json_line, validate_objective_bounds,
+    parse_param_init, parse_user_ids, read_observation_log, read_semicolon_csv,
+    receive_init_message, recv_objectives_blocking, send_json_line, validate_objective_bounds,
     validate_parameter_bounds, write_csv_rows, write_dataframe_csv,
 )
 from cabop.bayesopt import BayesOpt, BOSpace
@@ -327,8 +327,8 @@ def load_warm_start_raw():
     if not os.path.exists(y_path):
         raise FileNotFoundError(f"Warm-start objective CSV not found: {y_path}")
 
-    x_df = pd.read_csv(x_path, delimiter=";", encoding="utf-8")
-    y_df = pd.read_csv(y_path, delimiter=";", encoding="utf-8")
+    x_df = read_semicolon_csv(x_path)
+    y_df = read_semicolon_csv(y_path)
 
     missing_param_cols = [k for k in parameter_names if k not in x_df.columns]
     missing_obj_cols = [k for k in objective_names if k not in y_df.columns]

@@ -711,6 +711,34 @@ class BackendProtocolTests(unittest.TestCase):
                 self.assertEqual(iterations, [3, 4])
                 self.assertEqual(self.observation_iterations(folder), iterations)
 
+    def test_warm_start_accepts_utf8_bom_and_padded_headers(self):
+        for name in ("bo", "mobo", "dbo", "cabop"):
+            loader, n_obj, config, args, folder = BACKENDS[name]
+            with self.subTest(backend=name):
+                with tempfile.TemporaryDirectory() as init_root:
+                    with open(os.path.join(init_root, "x.csv"), "w", encoding="utf-8-sig", newline="") as f:
+                        f.write(" p0 \n2.0\n7.0\n")
+                    obj_header = ";".join(f" o{j} " for j in range(n_obj))
+                    obj_row1 = ";".join(["3.0"] * n_obj)
+                    obj_row2 = ";".join(["6.0"] * n_obj)
+                    with open(os.path.join(init_root, "y.csv"), "w", encoding="utf-8-sig", newline="") as f:
+                        f.write(f"{obj_header}\n{obj_row1}\n{obj_row2}\n")
+                    chunks = [json_line({"type": "objectives", "values": v}) for v in _replies(n_obj, 2)]
+                    init = _init(n_obj, warmStart=True, initialParametersDataPath="x.csv",
+                                 initialObjectivesDataPath="y.csv", **config)
+                    _, _, sent = self.run_main(loader(), init, chunks, args, env={"BO_INIT_ROOT": init_root})
+                iterations = [m["iteration"] for m in sent if m["type"] == "parameters"]
+                self.assertEqual(iterations, [3, 4])
+                self.assertEqual(self.observation_iterations(folder), iterations)
+
+        # Also verify padded ' Context ' column preserves leading-zero string IDs ('007').
+        with tempfile.TemporaryDirectory() as init_root:
+            p = pathlib.Path(init_root) / "ctx.csv"
+            p.write_text("\ufeff p0 ; Context \n2.0;007\n", encoding="utf-8")
+            df = reset_protocol_state().read_semicolon_csv(str(p), preserve_strings=True)
+            self.assertEqual(list(df.columns), ["p0", "Context"])
+            self.assertEqual(list(df["Context"]), ["007"])
+
     def test_stop_request_ends_every_backend_cleanly(self):
         for name, (loader, n_obj, config, args, folder) in BACKENDS.items():
             with self.subTest(backend=name):

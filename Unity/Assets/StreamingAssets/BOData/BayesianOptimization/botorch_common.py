@@ -18,7 +18,7 @@ import numpy as np
 import bo_library
 import bo_normalize
 import context_support
-from bo_protocol import log_exists, read_observation_log, write_dataframe_csv
+from bo_protocol import log_exists, read_observation_log, read_semicolon_csv, write_dataframe_csv
 
 
 # -------------------- context bookkeeping --------------------
@@ -100,9 +100,8 @@ def load_warm_start_data(parameters_csv, objectives_csv, parameter_names, parame
     if not os.path.exists(y_path):
         raise FileNotFoundError(f"Warm-start objective CSV not found: {y_path}")
 
-    x_df = pd.read_csv(x_path, delimiter=';', encoding='utf-8',
-                       dtype={context_support.CONTEXT_CSV_COLUMN: str})
-    y_df = pd.read_csv(y_path, delimiter=';', encoding='utf-8')
+    x_df = read_semicolon_csv(x_path, preserve_strings=True)
+    y_df = read_semicolon_csv(y_path)
 
     missing_param_cols = [k for k in parameter_names if k not in x_df.columns]
     missing_obj_cols = [k for k in objective_names if k not in y_df.columns]

@@ -614,7 +614,7 @@ def _drop_unsaved_copy(key):
 def _disk_text(path):
     """A log's content on disk ("" if it does not exist), or None if it cannot be read now."""
     try:
-        with open(path, "r", newline="", encoding="utf-8") as f:
+        with open(path, "r", newline="", encoding="utf-8-sig") as f:
             return f.read()
     except FileNotFoundError:
         return ""
@@ -702,7 +702,7 @@ def read_log_text(path):
     content = []
 
     def _read():
-        with open(path, "r", newline="", encoding="utf-8") as f:
+        with open(path, "r", newline="", encoding="utf-8-sig") as f:
             content[:] = [f.read()]
 
     error = _with_retries(_read, LOG_WRITE_RETRY_SEC)
@@ -814,7 +814,22 @@ def read_observation_log(path):
     text = read_log_text(path)
     if text is None:
         raise FileNotFoundError(f"Log file not found: {path}")
-    return pd.read_csv(io.StringIO(text), delimiter=';', dtype=str, keep_default_na=False)
+    df = pd.read_csv(io.StringIO(text), delimiter=';', dtype=str, keep_default_na=False)
+    df.columns = [c.strip() if isinstance(c, str) else c for c in df.columns]
+    return df
+
+
+def read_semicolon_csv(path, *, preserve_strings=False):
+    """Read an external ';'-separated CSV (warm-start or completed run), tolerating a UTF-8 BOM
+    (e.g. Excel 'CSV UTF-8') and surrounding whitespace on column headers."""
+    import pandas as pd  # lazy: the protocol helpers need the standard library only
+
+    if preserve_strings:
+        df = pd.read_csv(path, delimiter=';', encoding='utf-8-sig', dtype=str, keep_default_na=False)
+    else:
+        df = pd.read_csv(path, delimiter=';', encoding='utf-8-sig')
+    df.columns = [c.strip() if isinstance(c, str) else c for c in df.columns]
+    return df
 
 
 def create_csv_file(csv_file_path, fieldnames):

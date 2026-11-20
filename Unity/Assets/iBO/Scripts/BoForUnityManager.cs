@@ -796,6 +796,7 @@ namespace BayesianOptimization
                 Debug.Log("--------------------------------------Current Iteration (Final Design Round): " +
                           currentIteration.ToString(CultureInfo.InvariantCulture));
                 simulationRunning = true;
+                SetWelcomePanelVisible(false);
                 SetOptimizerStatePanelVisible(false);
 
                 if (reloadSceneOnIterationAdvance)
@@ -827,7 +828,8 @@ namespace BayesianOptimization
                 return;
             }
 
-            // hide the panel as the next iteration starts after scene transition
+            // hide the welcome and status panels as the next iteration starts
+            SetWelcomePanelVisible(false);
             SetOptimizerStatePanelVisible(false);
 
             Debug.Log("--------------------------------------Current Iteration: " +
@@ -1007,6 +1009,7 @@ namespace BayesianOptimization
             hasNewDesignParameterValues = false;
             _waitingForPythonProcess = false;
 
+            SetWelcomePanelVisible(false);
             SetOptimizerStatePanelVisible(RequiresOptimizerPanelForOutputText());
             SetLoadingVisible(false);
             SetNextButtonVisible(false);
@@ -1110,6 +1113,12 @@ namespace BayesianOptimization
         {
             if (nextButton != null)
                 nextButton.SetActive(visible);
+        }
+
+        private void SetWelcomePanelVisible(bool visible)
+        {
+            if (welcomePanel != null)
+                welcomePanel.SetActive(visible);
         }
 
         private void SetOptimizerStatePanelVisible(bool visible)
