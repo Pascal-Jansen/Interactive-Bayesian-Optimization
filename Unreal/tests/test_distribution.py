@@ -15,6 +15,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("unreal_bo_launcher", ROOT / "launch_backend.py")
@@ -32,6 +33,21 @@ class DistributionTests(unittest.TestCase):
         for port in (0, -1, 65536, 1.5, True, "56001"):
             with self.subTest(port=port), self.assertRaises(ValueError):
                 launcher.validate_port(port)
+
+    def test_model_library_choices_match_bo_library(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            init_dir = root / "InitData"
+            init_dir.mkdir()
+            for choice in ("botorch", "botorch-rust", "botorch_rs", "auto"):
+                with self.subTest(choice=choice):
+                    with unittest.mock.patch.object(launcher, "runpy") as mock_runpy, \
+                         unittest.mock.patch.dict(os.environ, {}, clear=False):
+                        os.environ.pop("BO_TORCH_THREADS", None)
+                        launcher.main(["--model-library", choice, "--log-root", str(root / "logs"), "--init-root", str(init_dir)])
+                        mock_runpy.run_path.assert_called_once()
+                        self.assertEqual(os.environ.get("BO_MODEL_LIBRARY"), choice)
+                        self.assertNotIn("BO_TORCH_THREADS", os.environ)
 
     def test_line_endings_are_canonical(self):
         with tempfile.TemporaryDirectory() as folder:

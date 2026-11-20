@@ -73,10 +73,16 @@ class ServerProcess:
 
     def wait_ready(self, timeout: float) -> None:
         """Wait for the ready line; the event is also set when the process ends without it."""
-        self._ready.wait(timeout)
+        signaled = self._ready.wait(timeout)
         if not self._seen_ready:
-            tail = "\n".join(list(self.output)[-30:])
             code = self.process.poll()
+            if signaled and code is None:
+                # On Windows, stdout EOF can wake _read_output slightly before the process handle signals exit.
+                try:
+                    code = self.process.wait(timeout=2.0)
+                except subprocess.TimeoutExpired:
+                    code = self.process.poll()
+            tail = "\n".join(list(self.output)[-30:])
             self.stop()
             reason = f"exited with code {code}" if code is not None else f"did not start within {timeout:g} s"
             raise RuntimeError(f"The iBO server {reason}. Last output:\n{tail}")

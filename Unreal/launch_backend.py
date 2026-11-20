@@ -56,7 +56,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--port", type=int, default=56001, help="Loopback TCP port; match the Unreal component Server Port")
     parser.add_argument("--log-root", type=Path, default=Path.home() / "BayesianOptimizationRuns")
     parser.add_argument("--init-root", type=Path, default=root / "InitData")
-    parser.add_argument("--model-library", choices=("botorch", "botorch-rust"), default="botorch")
+    parser.add_argument("--model-library", choices=("botorch", "botorch-rust", "botorch_rs", "auto"), default="botorch")
     args = parser.parse_args(argv)
     try:
         entrypoint = backend_entrypoint(args.backend, args.objectives)
@@ -76,7 +76,6 @@ def main(argv: list[str] | None = None) -> None:
     os.environ["BO_INIT_ROOT"] = str(init_root)
     os.environ["BO_MODEL_LIBRARY"] = args.model_library
     os.environ["BO_PORT"] = str(args.port)
-    os.environ.setdefault("BO_TORCH_THREADS", "1")
     os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     sys.dont_write_bytecode = True
     sys.path.insert(0, str(backend_dir))
