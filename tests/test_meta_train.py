@@ -452,6 +452,49 @@ class ManifestTests(_CliMixin, unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual([s["name"] for s in self.manifest()["sources"]], ["p01_main_run"])
 
+    def test_utf8_bom_and_padded_column_headers_are_accepted(self):
+        run_dir = self.logs / "p_bom" / "main" / "run"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        csv_text = (
+            "\ufeff UserID ; Iteration ; o0 ; o1 ; p0 ; p1 \n"
+            "p_bom;1;2.0;7.0;0.1;2.5\n"
+            "p_bom;2;4.0;6.0;0.5;3.0\n"
+            "p_bom;3;1.0;8.0;0.9;5.5\n"
+            "p_bom;4;3.0;9.0;0.3;4.0\n"
+        )
+        (run_dir / "ObservationsPerEvaluation.csv").write_bytes(csv_text.encode("utf-8"))
+        code, _, err = self.run_cli(run_dir)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.artifacts(), ["p_bom_main_run"])
+
+    def test_constant_objective_column_exports_positive_variance_without_fitting_restarts(self):
+        import types
+
+        fake_torch = types.SimpleNamespace(
+            double=np.float64,
+            tensor=lambda data, dtype=None: np.asarray(data, dtype=np.float64),
+        )
+        fit_calls = []
+
+        def fail_if_fitted(*_args, **_kwargs):
+            fit_calls.append(1)
+            raise AssertionError("Constant objective column should not run MLL restarts")
+
+        stack = (fake_torch, fail_if_fitted, None, None, None, None, None, None, None)
+        x_unit = np.array([[0.1, 0.2], [0.5, 0.6], [0.9, 0.3], [0.3, 0.8]], dtype=np.float64)
+        # Constant up to float roundoff (e.g. denormalized/renormalized fixed Likert score).
+        y_norm = np.array([[0.5], [0.5 + 1e-15], [0.5], [0.5 - 1e-15]], dtype=np.float64)
+        entries = self.mt.fit_per_objective_hyperparameters(x_unit, y_norm, stack)
+        self.assertEqual(fit_calls, [])
+        self.assertEqual(len(entries), 1)
+        entry = entries[0]
+        self.assertEqual(entry["kernel_type"], "matern52")
+        self.assertEqual(entry["lengthscale"], [1.0, 1.0])
+        self.assertGreater(entry["variance"], 0.0)
+        self.assertGreater(entry["noise"], 0.0)
+        self.assertEqual(entry["mean_constant"], 0.0)
+        self.assertTrue(entry["standardize_targets"])
+
 
 if __name__ == "__main__":
     unittest.main()

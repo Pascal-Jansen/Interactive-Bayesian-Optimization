@@ -123,6 +123,11 @@ namespace BayesianOptimization.Scripts
             if (duplicateObjectiveKeys.Count > 0)
                 errors.Add("Duplicate objective key(s): " + string.Join(", ", duplicateObjectiveKeys) + ".");
 
+            if (parameterKeys.Count == 0 && (manager.parameters == null || manager.parameters.Count == 0))
+                errors.Add("At least one parameter is required.");
+            if (objectiveKeys.Count == 0 && (manager.objectives == null || manager.objectives.Count == 0))
+                errors.Add("At least one objective is required.");
+
             var overlap = new List<string>();
             foreach (string key in parameterKeys)
             {
@@ -144,6 +149,69 @@ namespace BayesianOptimization.Scripts
                 );
             }
 
+            if (!manager.warmStart && manager.GetEffectiveSamplingIterations() < 1)
+            {
+                errors.Add("Sampling Iterations must be at least 1 when Warm Start is disabled.");
+            }
+
+            if (manager.warmStart &&
+                (string.IsNullOrWhiteSpace(manager.initialParametersDataPath) ||
+                 string.IsNullOrWhiteSpace(manager.initialObjectivesDataPath)))
+            {
+                errors.Add(
+                    "Warm Start is enabled, so both Initial Parameters Data Path and Initial Objectives Data Path " +
+                    "must be set."
+                );
+            }
+
+            if (manager.numOptimizationIterations < 0)
+            {
+                errors.Add(
+                    $"Optimization Iterations must be 0 or more (got {manager.numOptimizationIterations.ToString(CultureInfo.InvariantCulture)})."
+                );
+            }
+
+            if (manager.contextualOptimization && manager.optimizerBackend != BoForUnityManager.OptimizerBackend.BoTorch)
+            {
+                errors.Add(
+                    $"Contextual optimization is only supported with the BoTorch backend (got {manager.optimizerBackend})."
+                );
+            }
+
+            if (objectiveKeys.Count > 0)
+            {
+                if (manager.optimizerBackend == BoForUnityManager.OptimizerBackend.DBO && objectiveKeys.Count != 1)
+                {
+                    errors.Add(
+                        $"The DBO backend is single-objective and requires exactly 1 objective (got {objectiveKeys.Count.ToString(CultureInfo.InvariantCulture)})."
+                    );
+                }
+                else if (manager.optimizerBackend == BoForUnityManager.OptimizerBackend.MetaTAF && objectiveKeys.Count < 2)
+                {
+                    errors.Add(
+                        $"The MetaTAF backend is multi-objective and requires at least 2 objectives (got {objectiveKeys.Count.ToString(CultureInfo.InvariantCulture)})."
+                    );
+                }
+                else if (manager.optimizerBackend == BoForUnityManager.OptimizerBackend.CABOP)
+                {
+                    if (manager.cabopObjectiveMode == BoForUnityManager.CabopObjectiveMode.SingleObjective &&
+                        objectiveKeys.Count != 1)
+                    {
+                        errors.Add(
+                            $"CABOP SingleObjective mode requires exactly 1 objective (got {objectiveKeys.Count.ToString(CultureInfo.InvariantCulture)}). " +
+                            "Switch CABOP Objective Mode to MultiObjectiveScalarized or adjust the objectives."
+                        );
+                    }
+                    else if (manager.cabopObjectiveMode == BoForUnityManager.CabopObjectiveMode.MultiObjectiveScalarized &&
+                             objectiveKeys.Count < 2)
+                    {
+                        errors.Add(
+                            $"CABOP MultiObjectiveScalarized mode requires at least 2 objectives (got {objectiveKeys.Count.ToString(CultureInfo.InvariantCulture)})."
+                        );
+                    }
+                }
+            }
+
             if (manager.optimizerBackend != BoForUnityManager.OptimizerBackend.CABOP)
             {
                 if (manager.numRestarts < 1)
@@ -158,6 +226,13 @@ namespace BayesianOptimization.Scripts
                         $"Raw Samples ({manager.rawSamples.ToString(CultureInfo.InvariantCulture)}) must be at least " +
                         $"Optimizer Restarts ({manager.numRestarts.ToString(CultureInfo.InvariantCulture)}): the restarts " +
                         "are chosen from the raw samples."
+                    );
+                }
+
+                if (manager.optimizerBackend != BoForUnityManager.OptimizerBackend.DBO && manager.mcSamples < 1)
+                {
+                    errors.Add(
+                        $"MC Samples must be at least 1 (got {manager.mcSamples.ToString(CultureInfo.InvariantCulture)})."
                     );
                 }
             }

@@ -406,7 +406,9 @@ def read_run_csv(run_path):
         csv_path = os.path.join(run_path, "ObservationsPerEvaluation.csv")
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"No ObservationsPerEvaluation.csv under: {run_path}")
-    return pd.read_csv(csv_path, delimiter=";", encoding="utf-8")
+    df = pd.read_csv(csv_path, delimiter=";", encoding="utf-8-sig")
+    df.columns = [c.strip() if isinstance(c, str) else c for c in df.columns]
+    return df
 
 
 def normalize_param_column_strict(col, lo, hi, name):
@@ -472,6 +474,17 @@ def is_finite_restart(score, entry):
     return all(math.isfinite(float(v)) for v in values)
 
 
+# An objective column whose normalized range in [-1, 1] is at or below this threshold is
+# constant up to float round-off. Fitting 8 L-BFGS-B restarts on a zero-variance column
+# pushes the kernel outputscale toward 0 until it underflows to 0.0 on longer runs (which
+# openbo's loader then rejects because variance must be strictly positive); exporting a
+# tiny positive-variance constant prior in standardized-target space replays the exact
+# constant mean without fitting instability.
+CONSTANT_OBJECTIVE_PTP_EPS = 1e-12
+CONSTANT_OBJECTIVE_VARIANCE = 1e-6
+CONSTANT_OBJECTIVE_NOISE = 1e-4
+
+
 def fit_per_objective_hyperparameters(x_unit, y_norm, stack):
     """Fit one GP per objective and export hyperparameters the loader can replay.
 
@@ -502,6 +515,22 @@ def fit_per_objective_hyperparameters(x_unit, y_norm, stack):
     entries = []
     d = x_unit.shape[1]
     for j in range(y_norm.shape[1]):
+        y_col = np.asarray(y_norm[:, j], dtype=np.float64)
+        if float(np.ptp(y_col)) <= CONSTANT_OBJECTIVE_PTP_EPS:
+            # Standardize(m=1) centers y_t at its mean and leaves unit scale (stdv = 1.0)
+            # whenever stdv < 1e-8, so mean_constant = 0.0 with tiny positive variance/noise
+            # replays the constant objective level cleanly in openbo's loader.
+            entries.append({
+                "kernel_type": "matern52",
+                "lengthscale": [1.0] * d,
+                "variance": CONSTANT_OBJECTIVE_VARIANCE,
+                "noise": CONSTANT_OBJECTIVE_NOISE,
+                "mean_constant": 0.0,
+                "standardize_targets": True,
+                "optimize_noise": True,
+            })
+            continue
+
         y_t = torch.tensor(y_norm[:, j:j + 1], dtype=torch.double)
 
         best_score = None

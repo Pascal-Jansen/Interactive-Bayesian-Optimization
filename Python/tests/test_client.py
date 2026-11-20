@@ -106,14 +106,24 @@ class StudyTests(unittest.TestCase):
         cases = [
             (Study([], [Objective("o", 0, 1)]), "at least one parameter"),
             (Study([Parameter("x", 0, 1), Parameter("x", 0, 2)], [Objective("o", 0, 1)]), "unique"),
+            (Study([Parameter("x", 0, 1), Parameter(" X ", 0, 2)], [Objective("o", 0, 1)]), "unique"),
             (Study([Parameter("o", 0, 1)], [Objective("o", 0, 1)]), "unique"),
+            (Study([Parameter("Usability", 0, 1)], [Objective("usability", 0, 1)]), "unique"),
             (Study([Parameter(" ", 0, 1)], [Objective("o", 0, 1)]), "non-empty"),
             (Study([Parameter("x", 0, math.inf)], [Objective("o", 0, 1)]), "finite"),
             (Study([Parameter("x", 2, 1)], [Objective("o", 0, 1)]), "low 2 > high 1"),
+            (Study([Parameter("x", 1, 1)], [Objective("o", 0, 1)]), "low < high"),
+            (Study([Parameter("phase", 0, 1)], [Objective("o", 0, 1)]), "ObservationsPerEvaluation.csv"),
+            (Study([Parameter("x", 0, 1)], [Objective("isbest", 0, 1)]), "ObservationsPerEvaluation.csv"),
+            (Study([Parameter("context", 0, 1)], [Objective("o", 0, 1)],
+                   extra={"context": {"enabled": True}}), "ObservationsPerEvaluation.csv"),
         ]
         for study, message in cases:
             with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
                 study.init_message()
+
+        # Equal bounds on an objective remain allowed, and 'Context' is allowed when contextual BO is off.
+        Study([Parameter("Context", 0, 1)], [Objective("o", 1, 1)]).init_message()
 
 
 class ClientTests(unittest.TestCase):

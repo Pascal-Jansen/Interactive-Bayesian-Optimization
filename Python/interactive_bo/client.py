@@ -34,6 +34,19 @@ DEFAULT_CONFIG = {
     "warmStart": False,
 }
 
+# Fixed leading columns of ObservationsPerEvaluation.csv across backends (BoConfigValidator).
+FIXED_OBSERVATION_LOG_COLUMNS = (
+    "UserID",
+    "ConditionID",
+    "GroupID",
+    "Timestamp",
+    "Iteration",
+    "Phase",
+    "IsBest",
+    "IsPareto",
+)
+CONTEXT_LOG_COLUMN = "Context"
+
 
 class ProtocolError(RuntimeError):
     """The server broke the protocol or ended the session before the study finished."""
@@ -93,14 +106,36 @@ class Study:
         keys = [p.key for p in self.parameters] + [o.key for o in self.objectives]
         if any(not isinstance(k, str) or not k.strip() for k in keys):
             raise ValueError("Parameter and objective keys must be non-empty strings.")
-        duplicates = sorted({k for k in keys if keys.count(k) > 1})
+        seen: Dict[str, str] = {}
+        duplicates: List[str] = []
+        for k in keys:
+            trimmed = k.strip()
+            folded = trimmed.casefold()
+            if folded in seen:
+                duplicates.append(trimmed)
+            else:
+                seen[folded] = trimmed
         if duplicates:
-            raise ValueError(f"Keys must be unique across parameters and objectives: {duplicates}")
+            raise ValueError(f"Keys must be unique across parameters and objectives: {sorted(set(duplicates))}")
+
+        reserved = list(FIXED_OBSERVATION_LOG_COLUMNS)
+        ctx = self.extra.get("context") if isinstance(self.extra, Mapping) else None
+        if isinstance(ctx, Mapping) and bool(ctx.get("enabled")):
+            reserved.append(CONTEXT_LOG_COLUMN)
+        reserved_folded = {col.casefold() for col in reserved}
+        colliding = sorted({k.strip() for k in keys if k.strip().casefold() in reserved_folded})
+        if colliding:
+            raise ValueError(
+                f"Keys {colliding} collide with fixed columns of ObservationsPerEvaluation.csv ({reserved}). Rename them."
+            )
+
         for item in list(self.parameters) + list(self.objectives):
             if not (math.isfinite(item.low) and math.isfinite(item.high)):
                 raise ValueError(f"'{item.key}' needs finite bounds, got ({item.low}, {item.high}).")
             if item.high < item.low:
                 raise ValueError(f"'{item.key}' has low {item.low} > high {item.high}.")
+            if isinstance(item, Parameter) and item.high == item.low:
+                raise ValueError(f"Parameter '{item.key}' needs low < high, got ({item.low}, {item.high}).")
 
     def init_message(self) -> Dict[str, Any]:
         self.validate()
