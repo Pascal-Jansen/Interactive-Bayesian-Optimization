@@ -54,6 +54,28 @@ namespace BayesianOptimization
             Auto = 2
         }
 
+        public enum BoTorchKernelPreset
+        {
+            // Stock SingleTaskGP default (preserved for exact backward reproducibility).
+            Default = 0,
+            // Classic noisy BoTorch ARD Matern 5/2 (Gamma(3,6) lengthscale prior + Gamma(1.1,0.05) noise).
+            Matern52Ard = 1,
+            // C^1 Matern 3/2 ARD for low-d asymmetric continuous/perceptual tasks.
+            Matern32Ard = 2,
+            // C^0 Matern 1/2 ARD for sharp thresholds, haptics, or binary psychophysical responses.
+            Matern12Ard = 3,
+            // Matern 3/2 ARD with sqrt(d)-scaled LogNormal lengthscale prior (recommended across d = 4..28).
+            Matern32DimScaledArd = 4,
+            // Isotropic Matern 3/2 with sqrt(d) prior (3 hyperparameters; stable for coarse Likert / biosignals).
+            Matern32Iso = 5,
+            // Isotropic Rational Quadratic scale-mixture with sqrt(d) prior.
+            RqIso = 6,
+            // Shared-lengthscale 1D additive Matern 3/2 (Python BoTorch).
+            SharedAddMatern32 = 7,
+            // 5-hyperparameter 1D shared-additive + isotropic joint Matern 3/2 for small-budget d >= 6 HITL-BO.
+            SharedAddInterMatern32 = 8
+        }
+
         public enum MetaWeightMode
         {
             // Weights from objective-wise pairwise ranking agreement with the current
@@ -180,6 +202,11 @@ namespace BayesianOptimization
         // fall back to BoTorch (the console says so).
         // A study factor: keep it fixed within a study. Each run records the library it used.
         public ModelLibrary modelLibrary = ModelLibrary.BoTorch;
+
+        [Tooltip("GP covariance preset for plain SingleTaskGP runs on the BoTorch backend. " +
+                 "'Default' preserves stock SingleTaskGP behaviour; 'Matern32DimScaledArd', 'Matern32Iso', " +
+                 "and 'SharedAddInterMatern32' improve uncertainty calibration and high-d / noisy Likert accuracy.")]
+        public BoTorchKernelPreset botorchKernelPreset = BoTorchKernelPreset.Default;
 
         public CabopObjectiveMode cabopObjectiveMode = CabopObjectiveMode.SingleObjective;
         public bool cabopUseCostAwareAcquisition = true;
@@ -2217,6 +2244,19 @@ namespace BayesianOptimization
                      "acquiring a new one.")]
             public float cabopTolerance = 0.05f;
             public List<float> cabopPrefabricatedValues = new List<float>();
+
+            [Tooltip("Optional parent parameter key whose normalized value gates this child parameter in the GP " +
+                     "(e.g. an opacity/visibility/saturation parameter gating size or hue). Leave empty when ungated.")]
+            public string gatedBy = "";
+            [Range(0f, 0.999f)]
+            [Tooltip("Normalized parent threshold tau in [0, 1) at or below which this child parameter collapses to Gate Neutral.")]
+            public float gateThreshold = 0.0f;
+            [Range(0f, 1f)]
+            [Tooltip("Normalized neutral anchor c_0 in [0, 1] when gated off (0.0 = visibility/opacity off, 0.5 = HSV neutral hue, 1.0 = clean high-SNR anchor).")]
+            public float gateNeutral = 0.0f;
+            [Min(0f)]
+            [Tooltip("0 uses a piecewise-linear ramp above Gate Threshold; > 0 (e.g. 20) uses a smooth logistic switch.")]
+            public float gateSharpness = 0.0f;
 
             /// <summary>
             /// ParameterArgs(): a constructor that creates an empty instance of the ParameterArgs class.

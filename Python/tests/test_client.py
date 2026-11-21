@@ -102,6 +102,54 @@ class StudyTests(unittest.TestCase):
         self.assertEqual((msg["config"]["dboInitialAlpha"], msg["config"]["rawSamples"]), (0.98, 256))
         self.assertEqual(msg["context"], {"enabled": True})
 
+    def test_kernel_preset_and_parameter_gating_serialize_and_validate(self):
+        study = Study(
+            [
+                Parameter("saturation", 0.0, 1.0),
+                Parameter("hue", 0.0, 360.0, gated_by="saturation", gate_threshold=0.05, gate_neutral=0.5, gate_sharpness=20.0),
+            ],
+            [Objective("aesthetics", 1, 7)],
+            kernel_preset="Matern32_DimScaled_ARD",
+        )
+        msg = study.init_message()
+        self.assertEqual(msg["config"]["kernelPreset"], "matern32_dimscaled_ard")
+        self.assertNotIn("gatedBy", msg["parameters"][0])
+        self.assertEqual(
+            msg["parameters"][1],
+            {
+                "key": "hue",
+                "init": {"low": 0.0, "high": 360.0},
+                "gatedBy": "saturation",
+                "gateThreshold": 0.05,
+                "gateNeutral": 0.5,
+                "gateSharpness": 20.0,
+            },
+        )
+
+        bad_cases = [
+            (Study([Parameter("x", 0, 1)], [Objective("o", 0, 1)], kernel_preset="bogus"), "kernelPreset"),
+            (Study([Parameter("x", 0, 1, gated_by="missing")], [Objective("o", 0, 1)]), "does not match"),
+            (Study([Parameter("x", 0, 1, gated_by="x")], [Objective("o", 0, 1)]), "itself"),
+            (
+                Study(
+                    [Parameter("a", 0, 1, gated_by="b"), Parameter("b", 0, 1, gated_by="a")],
+                    [Objective("o", 0, 1)],
+                ),
+                "cycle",
+            ),
+            (
+                Study([Parameter("a", 0, 1), Parameter("b", 0, 1, gated_by="a", gate_threshold=1.0)], [Objective("o", 0, 1)]),
+                "gate_threshold",
+            ),
+            (
+                Study([Parameter("a", 0, 1), Parameter("b", 0, 1, gated_by="a", gate_neutral=1.5)], [Objective("o", 0, 1)]),
+                "gate_neutral",
+            ),
+        ]
+        for bad_study, pattern in bad_cases:
+            with self.subTest(pattern=pattern), self.assertRaisesRegex(ValueError, pattern):
+                bad_study.init_message()
+
     def test_invalid_studies_are_refused_before_sending(self):
         cases = [
             (Study([], [Objective("o", 0, 1)]), "at least one parameter"),

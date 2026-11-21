@@ -27,7 +27,7 @@ UNITY_INIT = {
         "batchSize": 1, "numRestarts": 10, "rawSamples": 1024, "numOptimizationIterations": 10, "mcSamples": 128,
         "numSamplingIterations": 6, "seed": 3, "nParameters": 2, "nObjectives": 2, "warmStart": False,
         "initialParametersDataPath": None, "initialObjectivesDataPath": "", "warmStartObjectiveFormat": "auto",
-        "optimizerBackend": "botorch", "cabopObjectiveMode": "single", "cabopUpdateRule": "rule",
+        "optimizerBackend": "botorch", "kernelPreset": "matern32_dimscaled_ard", "cabopObjectiveMode": "single", "cabopUpdateRule": "rule",
         "cabopUseCostAwareAcquisition": True, "cabopEnableCostBudget": False, "cabopMaxCumulativeCost": 0.0,
         "metaSourceDir": "MetaSources", "metaRequireSources": True, "metaWeightMode": "taf_r", "metaRho": 0.1,
         "metaTargetWeight": 1.0, "metaWarmupIters": 3, "metaDecayStartIter": 0, "metaDecayRate": 0.0,
@@ -37,9 +37,9 @@ UNITY_INIT = {
     },
     "parameters": [
         {"key": "ColorR", "init": {"low": 0.0, "high": 1.0}, "optSeqOrder": 0, "group": "default",
-         "tolerance": 0.0, "prefabValues": []},
+         "tolerance": 0.0, "prefabValues": [], "gatedBy": None, "gateThreshold": 0.0, "gateNeutral": 0.0, "gateSharpness": 0.0},
         {"key": "Size", "init": {"low": 0.5, "high": 2.0}, "optSeqOrder": 1, "group": "default",
-         "tolerance": 0.1, "prefabValues": [1.0, 1.5]},
+         "tolerance": 0.1, "prefabValues": [1.0, 1.5], "gatedBy": "ColorR", "gateThreshold": 0.05, "gateNeutral": 0.5, "gateSharpness": 20.0},
     ],
     "objectives": [
         {"key": "Trust", "init": {"low": 1.0, "high": 7.0, "minimize": 0}, "optSeqOrder": 0, "weight": 1.0},

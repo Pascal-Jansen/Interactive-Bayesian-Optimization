@@ -8,6 +8,7 @@ Unreal, web, Python) show the designs and report the results over the iBO protoc
 from .client import (
     DEFAULT_HOST,
     DEFAULT_PORT,
+    KERNEL_PRESETS,
     PROTOCOL_VERSION,
     Design,
     IboClient,
@@ -22,6 +23,7 @@ from .server import ServerProcess, default_backend_dir, launch_server
 __version__ = "2.0.1"
 
 __all__ = [
-    "DEFAULT_HOST", "DEFAULT_PORT", "PROTOCOL_VERSION", "Design", "IboClient", "Objective", "Parameter",
-    "ProtocolError", "ServerProcess", "Study", "default_backend_dir", "launch_server", "run_study",
+    "DEFAULT_HOST", "DEFAULT_PORT", "KERNEL_PRESETS", "PROTOCOL_VERSION", "Design", "IboClient",
+    "Objective", "Parameter", "ProtocolError", "ServerProcess", "Study", "default_backend_dir",
+    "launch_server", "run_study",
 ]

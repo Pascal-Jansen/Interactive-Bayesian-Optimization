@@ -134,14 +134,18 @@ def meta_capability():
     return True, ""
 
 
-def resolve(requested, contextual=None, meta=False):
+def resolve(requested, contextual=None, meta=False, kernel_preset="default", parameter_gates=()):
     """Choose the model library: returns ``(library, reason)``.
 
     ``requested`` is a BO_MODEL_LIBRARY value. ``contextual`` is falsy for plain runs, else
     the context embedding source ('learned', 'manual', 'image'; True means 'learned').
-    ``meta`` marks MetaTAF. botorch_rs requested but not installed raises ModelLibraryError;
-    every other reason not to use botorch_rs falls back to BoTorch, and ``reason`` says why.
+    ``meta`` marks MetaTAF. ``kernel_preset`` and ``parameter_gates`` carry optional BoTorch
+    covariance/input-gating settings (bo_kernels.py). botorch_rs requested but not installed
+    raises ModelLibraryError; every other reason not to use botorch_rs falls back to BoTorch,
+    and ``reason`` says why.
     """
+    import bo_kernels
+
     requested = normalize_request(requested)
     if requested == BOTORCH:
         return BOTORCH, f"{ENV_VAR}={requested}"
@@ -162,6 +166,9 @@ def resolve(requested, contextual=None, meta=False):
         supported, why = meta_capability()
         if not supported:
             return BOTORCH, f"{ENV_VAR}={requested}, botorch_rs {version} installed, but {why}; falling back to BoTorch"
+    if not contextual and not meta and not bo_kernels.supports_botorch_rs(kernel_preset, parameter_gates):
+        why = bo_kernels.botorch_rs_unsupported_reason(kernel_preset, parameter_gates)
+        return BOTORCH, f"{ENV_VAR}={requested}, botorch_rs {version} installed, but {why}; falling back to BoTorch"
     return BOTORCH_RS, f"{ENV_VAR}={requested}, botorch_rs {version}"
 
 
@@ -404,9 +411,9 @@ RUN_INFO_FILENAME = "RunInfo.json"
 RUN_INFO_SCHEMA_VERSION = 1
 
 
-def run_info(generator, seed, library_info):
+def run_info(generator, seed, library_info, kernel_preset=None, parameter_gates=None):
     """Content of RunInfo.json: what produced a bo.py / mobo.py run."""
-    return {
+    record = {
         "schema_version": RUN_INFO_SCHEMA_VERSION,
         "generator": generator,
         "created_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -416,6 +423,13 @@ def run_info(generator, seed, library_info):
         "python": sys.version,
         "platform": platform.platform(),
     }
+    if kernel_preset is not None:
+        record["kernel_preset"] = kernel_preset
+    if parameter_gates:
+        record["parameter_gates"] = [
+            g.to_record() if hasattr(g, "to_record") else g for g in parameter_gates
+        ]
+    return record
 
 
 def bound_library(objects):

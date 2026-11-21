@@ -29,6 +29,7 @@ if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
 
 import context_support
+import bo_kernels
 import bo_normalize
 # BoTorch or botorch-rust (BO_MODEL_LIBRARY), shared with mobo.py and MetaTAF.
 import bo_library
@@ -87,6 +88,10 @@ objectives_info = []   # [(lo, hi, minimizeFlag)]  # minimizeFlag==1 means minim
 
 # contextual optimization (LCE-M GP); None => plain SingleTaskGP behaviour
 CONTEXT_SETUP = None
+
+# GP kernel preset and optional hierarchical parameter gating (bo_kernels.py)
+KERNEL_PRESET = bo_kernels.DEFAULT_KERNEL_PRESET
+PARAMETER_GATES = ()
 
 # device
 tkwargs = {"dtype": torch.double, "device": torch.device("cpu")}
@@ -283,7 +288,12 @@ def select_model_library(requested=None):
     global MODEL_LIBRARY_INFO
     requested = bo_library.requested_library() if requested is None else requested
     contextual = CONTEXT_SETUP.embedding_source if CONTEXT_SETUP is not None else None
-    library, reason = bo_library.resolve(requested, contextual=contextual)
+    library, reason = bo_library.resolve(
+        requested,
+        contextual=contextual,
+        kernel_preset=KERNEL_PRESET,
+        parameter_gates=PARAMETER_GATES,
+    )
     warning = bo_library.fallback_message(requested, library, reason)
     if warning:
         print(warning, flush=True)
@@ -298,13 +308,26 @@ def write_run_info():
     """RunInfo.json in the run folder: model library, versions and seed of this run."""
     info = MODEL_LIBRARY_INFO or bo_library.library_record(
         MODEL_LIBRARY, MODEL_LIBRARY, "bound without select_model_library()")
-    payload = bo_library.run_info("Backend/bo.py", SEED, info)
+    payload = bo_library.run_info(
+        "Backend/bo.py",
+        SEED,
+        info,
+        kernel_preset=KERNEL_PRESET,
+        parameter_gates=PARAMETER_GATES,
+    )
     write_log_text(os.path.join(PROJECT_PATH, bo_library.RUN_INFO_FILENAME),
                    json.dumps(payload, indent=1, ensure_ascii=False, default=str))
 
 # -------------------- model --------------------
 def initialize_model(train_x, train_obj):
-    return botorch_common.initialize_model(train_x, train_obj, CONTEXT_SETUP, library=MODEL_LIBRARY)
+    return botorch_common.initialize_model(
+        train_x,
+        train_obj,
+        CONTEXT_SETUP,
+        library=MODEL_LIBRARY,
+        kernel_preset=KERNEL_PRESET,
+        parameter_gates=PARAMETER_GATES,
+    )
 
 # -------------------- acquisition (single-objective, LogNEI) --------------------
 def optimize_candidates(model, sampler, X_baseline):
@@ -473,7 +496,7 @@ def main():
     global WARM_START, CSV_PATH_PARAMETERS, CSV_PATH_OBJECTIVES, WARM_START_OBJECTIVE_FORMAT
     global USER_ID, CONDITION_ID, GROUP_ID, USER_LOG_ID, CONDITION_LOG_ID
     global parameter_names, objective_names, parameters_info, objectives_info
-    global CONTEXT_SETUP
+    global CONTEXT_SETUP, KERNEL_PRESET, PARAMETER_GATES
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     configure_listener_socket(s)
@@ -552,11 +575,20 @@ def main():
         validate_parameter_bounds(parameter_names, parameters_info, "BoTorch")
         validate_objective_bounds(objective_names, objectives_info)
 
+        KERNEL_PRESET = bo_kernels.parse_kernel_preset(cfg)
+        PARAMETER_GATES = bo_kernels.parse_parameter_gates(parameters, parameter_names)
+
         CONTEXT_SETUP = context_support.parse_context_config(init_msg)
         if CONTEXT_SETUP is not None:
             init_root = os.environ.get("BO_INIT_ROOT") or os.path.join(os.getcwd(), "InitData")
             context_support.resolve_embeddings(CONTEXT_SETUP, init_root=init_root)
             print("Contextual optimization:", context_support.describe(CONTEXT_SETUP), flush=True)
+            if KERNEL_PRESET != bo_kernels.DEFAULT_KERNEL_PRESET or PARAMETER_GATES:
+                print(
+                    "Warning: contextual optimization uses LCE-M's multi-task GP; "
+                    "kernelPreset and gatedBy apply to plain SingleTaskGP runs and are ignored.",
+                    flush=True,
+                )
 
         # Keys become CSV columns next to the fixed ones; a key such as "Phase" would
         # duplicate a column and break the log rewrite after the sampling phase.
@@ -578,6 +610,7 @@ def main():
             BATCH_SIZE=BATCH_SIZE, NUM_RESTARTS=NUM_RESTARTS, RAW_SAMPLES=RAW_SAMPLES,
             N_ITERATIONS=N_ITERATIONS, MC_SAMPLES=MC_SAMPLES,
             N_INITIAL=N_INITIAL, SEED=SEED, PROBLEM_DIM=PROBLEM_DIM, NUM_OBJS=NUM_OBJS,
+            KERNEL_PRESET=KERNEL_PRESET, PARAMETER_GATES=len(PARAMETER_GATES),
             MODEL_LIBRARY=bo_library.describe(MODEL_LIBRARY_INFO),
         ), flush=True)
 

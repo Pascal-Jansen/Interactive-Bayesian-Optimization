@@ -93,6 +93,18 @@ bool BoProtocol::BuildInit(const FBoStudySettings& Settings, FString& Json, FStr
         Error = TEXT("Invalid WarmStartObjectiveFormat.");
         return false;
     }
+    const TSet<FString> KernelPresets = {
+        TEXT("default"), TEXT("matern52_ard"), TEXT("matern32_ard"), TEXT("matern12_ard"),
+        TEXT("matern32_dimscaled_ard"), TEXT("matern32_iso"), TEXT("rq_iso"),
+        TEXT("shared_add_matern32"), TEXT("shared_add_inter_matern32")
+    };
+    const FString TrimmedPreset = Settings.KernelPreset.TrimStartAndEnd().ToLower();
+    const FString EffectivePreset = TrimmedPreset.IsEmpty() ? TEXT("default") : TrimmedPreset;
+    if (!KernelPresets.Contains(EffectivePreset))
+    {
+        Error = TEXT("Invalid KernelPreset.");
+        return false;
+    }
 
     TSharedPtr<FJsonObject> Advanced;
     const FString AdvancedText = Settings.AdvancedInitJson.TrimStartAndEnd().IsEmpty() ? TEXT("{}") : Settings.AdvancedInitJson;
@@ -171,8 +183,28 @@ bool BoProtocol::BuildInit(const FBoStudySettings& Settings, FString& Json, FStr
     Config->SetStringField(TEXT("initialObjectivesDataPath"), Settings.InitialObjectivesDataPath);
     Config->SetStringField(TEXT("warmStartObjectiveFormat"), Settings.WarmStartObjectiveFormat);
     Config->SetStringField(TEXT("optimizerBackend"), BackendName(Settings.Backend));
+    if (EffectivePreset != TEXT("default") || !Config->HasField(TEXT("kernelPreset")))
+    {
+        Config->SetStringField(TEXT("kernelPreset"), EffectivePreset);
+    }
+    else
+    {
+        FString AdvPreset;
+        if (!Config->TryGetStringField(TEXT("kernelPreset"), AdvPreset) ||
+            !KernelPresets.Contains(AdvPreset.TrimStartAndEnd().ToLower()))
+        {
+            Error = TEXT("Invalid AdvancedInitJson.config.kernelPreset.");
+            return false;
+        }
+    }
     Config->SetStringField(TEXT("cabopObjectiveMode"), Settings.Objectives.Num() == 1 ? TEXT("single") : TEXT("multi"));
 
+    TSet<FString> ParameterFoldedKeys;
+    for (const FBoParameter& P : Settings.Parameters)
+    {
+        ParameterFoldedKeys.Add(P.Key.ToLower());
+    }
+    TMap<FString, FString> GateParents;
     TSet<FString> Used;
     TArray<TSharedPtr<FJsonValue>> Parameters;
     for (int32 Index = 0; Index < Settings.Parameters.Num(); ++Index)
@@ -202,7 +234,42 @@ bool BoProtocol::BuildInit(const FBoStudySettings& Settings, FString& Json, FStr
         PObject->SetStringField(TEXT("group"), P.Group);
         PObject->SetNumberField(TEXT("tolerance"), P.Tolerance);
         PObject->SetArrayField(TEXT("prefabValues"), Prefabs);
+        const FString GatedByTrimmed = P.GatedBy.TrimStartAndEnd();
+        if (!GatedByTrimmed.IsEmpty())
+        {
+            const FString ChildFolded = P.Key.ToLower();
+            const FString ParentFolded = GatedByTrimmed.ToLower();
+            if (!ParameterFoldedKeys.Contains(ParentFolded) || ParentFolded == ChildFolded ||
+                !FMath::IsFinite(P.GateThreshold) || P.GateThreshold < 0.0 || P.GateThreshold >= 1.0 ||
+                !FMath::IsFinite(P.GateNeutral) || P.GateNeutral < 0.0 || P.GateNeutral > 1.0 ||
+                !FMath::IsFinite(P.GateSharpness) || P.GateSharpness < 0.0)
+            {
+                Error = FString::Printf(TEXT("Invalid parameter gate configuration for parameter: %s"), *P.Key);
+                return false;
+            }
+            GateParents.Add(ChildFolded, ParentFolded);
+            PObject->SetStringField(TEXT("gatedBy"), GatedByTrimmed);
+            PObject->SetNumberField(TEXT("gateThreshold"), P.GateThreshold);
+            PObject->SetNumberField(TEXT("gateNeutral"), P.GateNeutral);
+            PObject->SetNumberField(TEXT("gateSharpness"), P.GateSharpness);
+        }
         Parameters.Add(MakeShared<FJsonValueObject>(PObject));
+    }
+    for (const auto& Pair : GateParents)
+    {
+        TSet<FString> Trail;
+        FString Cursor = Pair.Key;
+        while (!Cursor.IsEmpty())
+        {
+            if (Trail.Contains(Cursor))
+            {
+                Error = TEXT("Parameter gating contains a cycle.");
+                return false;
+            }
+            Trail.Add(Cursor);
+            const FString* Next = GateParents.Find(Cursor);
+            Cursor = Next ? *Next : FString();
+        }
     }
     TArray<TSharedPtr<FJsonValue>> Objectives;
     for (int32 Index = 0; Index < Settings.Objectives.Num(); ++Index)

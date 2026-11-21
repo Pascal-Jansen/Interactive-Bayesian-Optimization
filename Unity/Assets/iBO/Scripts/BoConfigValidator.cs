@@ -162,6 +162,9 @@ namespace BayesianOptimization.Scripts
                 }
             }
 
+            if (manager.optimizerBackend == BoForUnityManager.OptimizerBackend.BoTorch && manager.parameters != null)
+                AddParameterGateErrors(errors, manager.parameters, parameterKeys);
+
             if (manager.optimizerBackend == BoForUnityManager.OptimizerBackend.MetaTAF && manager.seed < 0)
             {
                 errors.Add(
@@ -171,6 +174,103 @@ namespace BayesianOptimization.Scripts
             }
 
             return errors;
+        }
+
+        private static void AddParameterGateErrors(
+            List<string> errors,
+            List<ParameterEntry> parameters,
+            HashSet<string> parameterKeys)
+        {
+            var gateParent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var canonicalKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < parameters.Count; i++)
+            {
+                var entry = parameters[i];
+                if (entry == null || entry.value == null || string.IsNullOrWhiteSpace(entry.key))
+                    continue;
+
+                string key = entry.key.Trim();
+                if (!canonicalKey.ContainsKey(key))
+                    canonicalKey[key] = key;
+                else
+                    continue;
+
+                string parent = (entry.value.gatedBy ?? string.Empty).Trim();
+                if (string.IsNullOrEmpty(parent))
+                    continue;
+
+                if (!parameterKeys.Contains(parent))
+                {
+                    errors.Add(
+                        $"Parameter '{key}': Gated By '{parent}' does not match any configured parameter key."
+                    );
+                    continue;
+                }
+
+                if (string.Equals(key, parent, StringComparison.OrdinalIgnoreCase))
+                {
+                    errors.Add($"Parameter '{key}': cannot be gated by itself.");
+                    continue;
+                }
+
+                float tau = entry.value.gateThreshold;
+                if (!BoObjectiveMath.IsFinite(tau) || tau < 0f || tau >= 1f)
+                {
+                    errors.Add(
+                        $"Parameter '{key}': Gate Threshold ({Format(tau)}) must lie in [0, 1)."
+                    );
+                }
+
+                float neutral = entry.value.gateNeutral;
+                if (!BoObjectiveMath.IsFinite(neutral) || neutral < 0f || neutral > 1f)
+                {
+                    errors.Add(
+                        $"Parameter '{key}': Gate Neutral ({Format(neutral)}) must lie in [0, 1]."
+                    );
+                }
+
+                float sharpness = entry.value.gateSharpness;
+                if (!BoObjectiveMath.IsFinite(sharpness) || sharpness < 0f)
+                {
+                    errors.Add(
+                        $"Parameter '{key}': Gate Sharpness ({Format(sharpness)}) must be 0 or more."
+                    );
+                }
+
+                gateParent[key] = parent;
+            }
+
+            var visitState = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (string startKey in gateParent.Keys)
+            {
+                if (visitState.ContainsKey(startKey))
+                    continue;
+
+                var trail = new List<string>();
+                string cursor = startKey;
+                while (!string.IsNullOrEmpty(cursor))
+                {
+                    if (visitState.TryGetValue(cursor, out int state))
+                    {
+                        if (state == 1)
+                        {
+                            int idx = trail.FindIndex(k => string.Equals(k, cursor, StringComparison.OrdinalIgnoreCase));
+                            var cycle = idx >= 0 ? trail.GetRange(idx, trail.Count - idx) : new List<string>(trail);
+                            cycle.Add(canonicalKey.TryGetValue(cursor, out string canon) ? canon : cursor);
+                            errors.Add("Parameter gating contains a cycle: " + string.Join(" -> ", cycle) + ".");
+                        }
+                        break;
+                    }
+
+                    visitState[cursor] = 1;
+                    trail.Add(canonicalKey.TryGetValue(cursor, out string display) ? display : cursor);
+                    gateParent.TryGetValue(cursor, out cursor);
+                }
+
+                foreach (string visited in trail)
+                    visitState[visited] = 2;
+            }
         }
 
         /// <summary>
