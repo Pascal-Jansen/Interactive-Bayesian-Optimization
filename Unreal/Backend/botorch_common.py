@@ -15,6 +15,7 @@ import time
 
 import numpy as np
 
+import bo_kernels
 import bo_library
 import bo_normalize
 import context_support
@@ -61,17 +62,23 @@ def acquisition_baseline(train_x, context_setup):
 
 
 # -------------------- model --------------------
-def initialize_model(train_x, train_obj, context_setup, library=bo_library.BOTORCH):
+def initialize_model(train_x, train_obj, context_setup, library=bo_library.BOTORCH,
+                     kernel_preset=bo_kernels.DEFAULT_KERNEL_PRESET, parameter_gates=()):
     """(mll, model): an LCE-M GP in contextual mode, otherwise a SingleTaskGP.
 
     ``library`` is the model library of the run (bo_library: 'botorch' or 'botorch_rs').
+    ``kernel_preset`` and ``parameter_gates`` configure optional GP covariance presets and
+    hierarchical parameter gating for plain SingleTaskGP runs (bo_kernels.py).
     """
     if context_setup is not None:
         return context_support.build_contextual_model(train_x, train_obj, context_setup, library=library)
-    names = bo_library.namespace(library)
-    model = names.SingleTaskGP(train_x, train_obj)
-    mll = names.ExactMarginalLogLikelihood(model.likelihood, model)
-    return mll, model
+    return bo_kernels.build_single_task_gp(
+        train_x,
+        train_obj,
+        library=library,
+        kernel_preset=kernel_preset,
+        parameter_gates=parameter_gates,
+    )
 
 
 # -------------------- warm start --------------------

@@ -131,6 +131,30 @@
             "type": "number"
           },
           "description": "CABOP prefabricated values"
+        },
+        "gatedBy": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional parent parameter key whose normalized value gates this child parameter"
+        },
+        "gateThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 1,
+          "description": "Normalized parent threshold in [0, 1) at or below which this parameter collapses to gateNeutral"
+        },
+        "gateNeutral": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Normalized neutral anchor c_0 in [0, 1] when gated off"
+        },
+        "gateSharpness": {
+          "type": "number",
+          "minimum": 0,
+          "description": "0 for piecewise-linear ramp above gateThreshold; >0 for smooth logistic switch"
         }
       }
     },
@@ -170,6 +194,20 @@
             "cabop",
             "meta-taf",
             "dbo"
+          ]
+        },
+        "kernelPreset": {
+          "enum": [
+            "default",
+            "matern52_ard",
+            "matern32_ard",
+            "matern12_ard",
+            "matern32_dimscaled_ard",
+            "matern32_iso",
+            "rq_iso",
+            "shared_add_matern32",
+            "shared_add_inter_matern32",
+            null
           ]
         },
         "nParameters": {

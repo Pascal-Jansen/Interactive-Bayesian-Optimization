@@ -46,6 +46,18 @@ struct BAYESIANOPTIMIZATION_API FBoParameter
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CABOP")
     TArray<double> PrefabricatedValues;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gating")
+    FString GatedBy;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gating", meta = (ClampMin = "0", ClampMax = "0.999"))
+    double GateThreshold = 0.0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gating", meta = (ClampMin = "0", ClampMax = "1"))
+    double GateNeutral = 0.0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gating", meta = (ClampMin = "0"))
+    double GateSharpness = 0.0;
 };
 
 USTRUCT(BlueprintType)
@@ -100,6 +112,11 @@ struct BAYESIANOPTIMIZATION_API FBoStudySettings
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Model")
     int32 Seed = 1;
+
+    // default, matern52_ard, matern32_ard, matern12_ard, matern32_dimscaled_ard,
+    // matern32_iso, rq_iso, shared_add_matern32, or shared_add_inter_matern32.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Model")
+    FString KernelPreset = TEXT("default");
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Warm Start")
     bool bWarmStart = false;

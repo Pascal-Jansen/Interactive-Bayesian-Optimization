@@ -162,12 +162,30 @@ def install_stub_modules():
     models_mod = types.ModuleType("botorch.models")
 
     class _SingleTaskGP:
-        def __init__(self, train_x, train_obj):
+        def __init__(self, train_x, train_obj, covar_module=None, likelihood=None, input_transform=None, **kwargs):
             self.train_inputs = (train_x,)
-            self.likelihood = object()
+            self.likelihood = likelihood if likelihood is not None else object()
+            self.covar_module = covar_module
+            self.input_transform = input_transform
 
     models_mod.SingleTaskGP = _SingleTaskGP
     sys.modules["botorch.models"] = models_mod
+
+    transforms_mod = types.ModuleType("botorch.models.transforms")
+    transforms_input_mod = types.ModuleType("botorch.models.transforms.input")
+
+    class _InputTransform:
+        transform_on_train = True
+        transform_on_eval = True
+        transform_on_fantasize = True
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+    transforms_input_mod.InputTransform = _InputTransform
+    transforms_mod.input = transforms_input_mod
+    sys.modules["botorch.models.transforms"] = transforms_mod
+    sys.modules["botorch.models.transforms.input"] = transforms_input_mod
 
     fit_mod = types.ModuleType("botorch.fit")
     fit_mod.fit_gpytorch_mll = lambda mll: None
@@ -206,6 +224,37 @@ def install_stub_modules():
 
     gpytorch_mlls_mod.ExactMarginalLogLikelihood = _ExactMarginalLogLikelihood
     sys.modules["gpytorch.mlls"] = gpytorch_mlls_mod
+
+    gpytorch_kernels_mod = types.ModuleType("gpytorch.kernels")
+
+    class _StubKernel:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+        def __add__(self, other):
+            return _StubKernel(self, other, op="add")
+
+    gpytorch_kernels_mod.Kernel = _StubKernel
+    gpytorch_kernels_mod.ScaleKernel = _StubKernel
+    gpytorch_kernels_mod.MaternKernel = _StubKernel
+    gpytorch_kernels_mod.RQKernel = _StubKernel
+    gpytorch_kernels_mod.RBFKernel = _StubKernel
+    sys.modules["gpytorch.kernels"] = gpytorch_kernels_mod
+
+    gpytorch_priors_mod = types.ModuleType("gpytorch.priors")
+    gpytorch_priors_mod.GammaPrior = lambda *a, **kw: ("GammaPrior", a, kw)
+    gpytorch_priors_mod.LogNormalPrior = lambda *a, **kw: ("LogNormalPrior", a, kw)
+    sys.modules["gpytorch.priors"] = gpytorch_priors_mod
+
+    gpytorch_constraints_mod = types.ModuleType("gpytorch.constraints")
+    gpytorch_constraints_mod.GreaterThan = lambda *a, **kw: ("GreaterThan", a, kw)
+    gpytorch_constraints_mod.Interval = lambda *a, **kw: ("Interval", a, kw)
+    sys.modules["gpytorch.constraints"] = gpytorch_constraints_mod
+
+    gpytorch_likelihoods_mod = types.ModuleType("gpytorch.likelihoods")
+    gpytorch_likelihoods_mod.GaussianLikelihood = lambda *a, **kw: ("GaussianLikelihood", a, kw)
+    sys.modules["gpytorch.likelihoods"] = gpytorch_likelihoods_mod
 
     moocore_mod = types.ModuleType("moocore")
     moocore_mod.calls = []

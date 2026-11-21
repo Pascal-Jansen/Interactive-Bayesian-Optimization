@@ -59,7 +59,10 @@ ends; every completed evaluation stays logged. A `stop` in place of the init ref
 | `cabopGroupCosts` | array, optional | CABOP cost model per parameter group, manual section 8.7 |
 
 **Parameter**: `key` (unique string), `init: {"low", "high"}` with `low < high`, in the parameter's own
-units. CABOP also reads `group` (string), `tolerance` (fraction of the range, 0..1) and
+units. BoTorch optionally reads hierarchical parameter gating metadata: `gatedBy` (parent parameter key),
+`gateThreshold` (normalized parent threshold in `[0, 1)`, default `0`), `gateNeutral` (normalized inactive
+anchor `c_0` in `[0, 1]`, default `0`), and `gateSharpness` (`0` for a linear ramp, `> 0` for a smooth
+logistic switch). CABOP also reads `group` (string), `tolerance` (fraction of the range, 0..1) and
 `prefabValues` (numbers); `optSeqOrder` (integer) is informational.
 
 **Objective**: `key` (unique, distinct from parameter keys), `init: {"low", "high", "minimize"}` with
@@ -73,6 +76,7 @@ Older clients may send `init` as a string, `"low,high"` or `"low,high,minimize"`
 | Key | Default | Applies to | Meaning |
 |---|---|---|---|
 | `optimizerBackend` | `"botorch"` | all | `botorch`, `cabop`, `meta-taf` or `dbo` |
+| `kernelPreset` | `"default"` | botorch | GP covariance preset (`default`, `matern52_ard`, `matern32_ard`, `matern12_ard`, `matern32_dimscaled_ard`, `matern32_iso`, `rq_iso`, `shared_add_matern32`, `shared_add_inter_matern32`) |
 | `nParameters`, `nObjectives` | required | all | Must equal the array lengths |
 | `numSamplingIterations` | 2·(nParameters+1) | all | Initial space-filling designs (Unity and the Python client send 2·(n+1); a server that receives no value uses 5) |
 | `numOptimizationIterations` | 10 | all | Model-based designs after sampling |

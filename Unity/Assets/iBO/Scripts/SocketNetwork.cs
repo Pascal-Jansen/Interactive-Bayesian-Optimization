@@ -36,7 +36,7 @@ namespace BayesianOptimization.Scripts
         public int nParameters, nObjectives;
         public bool warmStart;
         public string initialParametersDataPath, initialObjectivesDataPath, warmStartObjectiveFormat;
-        public string optimizerBackend, cabopObjectiveMode, cabopUpdateRule;
+        public string optimizerBackend, kernelPreset, cabopObjectiveMode, cabopUpdateRule;
         public bool cabopUseCostAwareAcquisition, cabopEnableCostBudget;
         public float cabopMaxCumulativeCost;
         // Meta-TAF backend settings (ignored by the other backends).
@@ -80,6 +80,10 @@ namespace BayesianOptimization.Scripts
         public string group;
         public float tolerance;
         public List<float> prefabValues;
+        public string gatedBy;
+        public float gateThreshold;
+        public float gateNeutral;
+        public float gateSharpness;
     }
 
     class ObjInfo
@@ -694,6 +698,7 @@ namespace BayesianOptimization.Scripts
 
                     parameter.value.optSeqOrder = parameterPayload.Count;
                     string cabopGroup = NormalizeCabopGroup(parameter.value.cabopGroup);
+                    string gatedBy = (parameter.value.gatedBy ?? string.Empty).Trim();
                     parameterGroups.Add(cabopGroup);
                     parameterPayload.Add(new ParamInfo
                     {
@@ -708,7 +713,11 @@ namespace BayesianOptimization.Scripts
                         // Sent unchanged: BoConfigValidator and the CABOP backend reject a tolerance outside
                         // [0, 1] instead of it being rewritten to "never reuse".
                         tolerance = parameter.value.cabopTolerance,
-                        prefabValues = NormalizeCabopPrefabricatedValues(parameter.value.cabopPrefabricatedValues)
+                        prefabValues = NormalizeCabopPrefabricatedValues(parameter.value.cabopPrefabricatedValues),
+                        gatedBy = string.IsNullOrEmpty(gatedBy) ? null : gatedBy,
+                        gateThreshold = parameter.value.gateThreshold,
+                        gateNeutral = parameter.value.gateNeutral,
+                        gateSharpness = parameter.value.gateSharpness
                     });
                 }
             }
@@ -844,6 +853,7 @@ namespace BayesianOptimization.Scripts
                     initialObjectivesDataPath = _bomanager.initialObjectivesDataPath,
                     warmStartObjectiveFormat = NormalizeWarmStartObjectiveFormat(_bomanager.warmStartObjectiveFormat),
                     optimizerBackend = NormalizeOptimizerBackend(_bomanager.optimizerBackend),
+                    kernelPreset = NormalizeKernelPreset(_bomanager.botorchKernelPreset),
                     cabopObjectiveMode = NormalizeCabopObjectiveMode(_bomanager.cabopObjectiveMode),
                     cabopUseCostAwareAcquisition = _bomanager.cabopUseCostAwareAcquisition,
                     cabopUpdateRule = NormalizeCabopUpdateRule(_bomanager.cabopUpdateRule),
@@ -1080,6 +1090,32 @@ namespace BayesianOptimization.Scripts
                 case BayesianOptimization.BoForUnityManager.OptimizerBackend.BoTorch:
                 default:
                     return "botorch";
+            }
+        }
+
+        private static string NormalizeKernelPreset(BayesianOptimization.BoForUnityManager.BoTorchKernelPreset preset)
+        {
+            switch (preset)
+            {
+                case BayesianOptimization.BoForUnityManager.BoTorchKernelPreset.Matern52Ard:
+                    return "matern52_ard";
+                case BayesianOptimization.BoForUnityManager.BoTorchKernelPreset.Matern32Ard:
+                    return "matern32_ard";
+                case BayesianOptimization.BoForUnityManager.BoTorchKernelPreset.Matern12Ard:
+                    return "matern12_ard";
+                case BayesianOptimization.BoForUnityManager.BoTorchKernelPreset.Matern32DimScaledArd:
+                    return "matern32_dimscaled_ard";
+                case BayesianOptimization.BoForUnityManager.BoTorchKernelPreset.Matern32Iso:
+                    return "matern32_iso";
+                case BayesianOptimization.BoForUnityManager.BoTorchKernelPreset.RqIso:
+                    return "rq_iso";
+                case BayesianOptimization.BoForUnityManager.BoTorchKernelPreset.SharedAddMatern32:
+                    return "shared_add_matern32";
+                case BayesianOptimization.BoForUnityManager.BoTorchKernelPreset.SharedAddInterMatern32:
+                    return "shared_add_inter_matern32";
+                case BayesianOptimization.BoForUnityManager.BoTorchKernelPreset.Default:
+                default:
+                    return "default";
             }
         }
 

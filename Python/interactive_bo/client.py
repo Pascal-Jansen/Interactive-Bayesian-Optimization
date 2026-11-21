@@ -34,6 +34,18 @@ DEFAULT_CONFIG = {
     "warmStart": False,
 }
 
+KERNEL_PRESETS = (
+    "default",
+    "matern52_ard",
+    "matern32_ard",
+    "matern12_ard",
+    "matern32_dimscaled_ard",
+    "matern32_iso",
+    "rq_iso",
+    "shared_add_matern32",
+    "shared_add_inter_matern32",
+)
+
 
 class ProtocolError(RuntimeError):
     """The server broke the protocol or ended the session before the study finished."""
@@ -46,9 +58,23 @@ class Parameter:
     key: str
     low: float
     high: float
+    gated_by: Optional[str] = None
+    gate_threshold: float = 0.0
+    gate_neutral: float = 0.0
+    gate_sharpness: float = 0.0
 
     def to_message(self) -> Dict[str, Any]:
-        return {"key": self.key, "init": {"low": float(self.low), "high": float(self.high)}}
+        payload: Dict[str, Any] = {
+            "key": self.key,
+            "init": {"low": float(self.low), "high": float(self.high)},
+        }
+        parent = (self.gated_by or "").strip()
+        if parent:
+            payload["gatedBy"] = parent
+            payload["gateThreshold"] = float(self.gate_threshold)
+            payload["gateNeutral"] = float(self.gate_neutral)
+            payload["gateSharpness"] = float(self.gate_sharpness)
+        return payload
 
 
 @dataclass(frozen=True)
@@ -78,6 +104,7 @@ class Study:
     parameters: List[Parameter]
     objectives: List[Objective]
     backend: str = "botorch"
+    kernel_preset: Optional[str] = None
     sampling_iterations: Optional[int] = None  # None: 2 * (number of parameters + 1), as in Unity
     optimization_iterations: int = 10
     seed: int = 3
@@ -102,6 +129,52 @@ class Study:
             if item.high < item.low:
                 raise ValueError(f"'{item.key}' has low {item.low} > high {item.high}.")
 
+        preset_raw = self.config.get("kernelPreset") if "kernelPreset" in self.config else self.kernel_preset
+        if preset_raw is not None:
+            preset_norm = str(preset_raw).strip().lower() or "default"
+            if preset_norm not in KERNEL_PRESETS:
+                raise ValueError(f"kernelPreset must be one of {list(KERNEL_PRESETS)}, got {preset_raw!r}.")
+
+        param_by_folded = {p.key.strip().casefold(): p.key.strip() for p in self.parameters}
+        gate_parent: Dict[str, str] = {}
+        for p in self.parameters:
+            parent = (p.gated_by or "").strip()
+            if not parent:
+                continue
+            child_folded = p.key.strip().casefold()
+            parent_folded = parent.casefold()
+            if parent_folded not in param_by_folded:
+                raise ValueError(f"Parameter '{p.key}' gated_by='{parent}' does not match any parameter.")
+            if parent_folded == child_folded:
+                raise ValueError(f"Parameter '{p.key}' cannot be gated by itself.")
+            if not math.isfinite(p.gate_threshold) or p.gate_threshold < 0.0 or p.gate_threshold >= 1.0:
+                raise ValueError(f"Parameter '{p.key}' gate_threshold must lie in [0, 1), got {p.gate_threshold!r}.")
+            if not math.isfinite(p.gate_neutral) or p.gate_neutral < 0.0 or p.gate_neutral > 1.0:
+                raise ValueError(f"Parameter '{p.key}' gate_neutral must lie in [0, 1], got {p.gate_neutral!r}.")
+            if not math.isfinite(p.gate_sharpness) or p.gate_sharpness < 0.0:
+                raise ValueError(f"Parameter '{p.key}' gate_sharpness must be >= 0, got {p.gate_sharpness!r}.")
+            gate_parent[child_folded] = parent_folded
+
+        visit_state: Dict[str, int] = {}
+        for start in gate_parent:
+            if start in visit_state:
+                continue
+            trail: List[str] = []
+            cur: Optional[str] = start
+            while cur is not None:
+                st = visit_state.get(cur, 0)
+                if st == 1:
+                    idx = trail.index(cur)
+                    cycle = [param_by_folded[k] for k in trail[idx:]] + [param_by_folded[cur]]
+                    raise ValueError("Parameter gating contains a cycle: " + " -> ".join(cycle) + ".")
+                if st == 2:
+                    break
+                visit_state[cur] = 1
+                trail.append(cur)
+                cur = gate_parent.get(cur)
+            for node in trail:
+                visit_state[node] = 2
+
     def init_message(self) -> Dict[str, Any]:
         self.validate()
         sampling = self.sampling_iterations
@@ -116,6 +189,8 @@ class Study:
             "nParameters": len(self.parameters),
             "nObjectives": len(self.objectives),
         })
+        if self.kernel_preset is not None:
+            config["kernelPreset"] = str(self.kernel_preset).strip().lower() or "default"
         config.update(self.config)
         message = {
             "type": "init",

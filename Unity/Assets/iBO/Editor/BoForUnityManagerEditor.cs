@@ -47,6 +47,7 @@ namespace BayesianOptimization.Editor
         private SerializedProperty warmStartObjectiveFormatProp;
         private SerializedProperty optimizerBackendProp;
         private SerializedProperty modelLibraryProp;
+        private SerializedProperty botorchKernelPresetProp;
         private SerializedProperty cabopObjectiveModeProp;
         private SerializedProperty cabopUseCostAwareAcquisitionProp;
         private SerializedProperty cabopUpdateRuleProp;
@@ -145,6 +146,7 @@ namespace BayesianOptimization.Editor
             warmStartObjectiveFormatProp = serializedObject.FindProperty("warmStartObjectiveFormat");
             optimizerBackendProp = serializedObject.FindProperty("optimizerBackend");
             modelLibraryProp = serializedObject.FindProperty("modelLibrary");
+            botorchKernelPresetProp = serializedObject.FindProperty("botorchKernelPreset");
             cabopObjectiveModeProp = serializedObject.FindProperty("cabopObjectiveMode");
             cabopUseCostAwareAcquisitionProp = serializedObject.FindProperty("cabopUseCostAwareAcquisition");
             cabopUpdateRuleProp = serializedObject.FindProperty("cabopUpdateRule");
@@ -332,6 +334,19 @@ namespace BayesianOptimization.Editor
                         "(RunInfo.json / MetaRunState.json). " +
                         "See README 8.16.",
                         MessageType.Info
+                    );
+                }
+
+                if (!useMetaTaf && botorchKernelPresetProp != null && !contextualOptimizationProp.boolValue)
+                {
+                    EditorGUILayout.PropertyField(
+                        botorchKernelPresetProp,
+                        new GUIContent(
+                            "GP Kernel Preset",
+                            "Default preserves stock SingleTaskGP behaviour. Matern32DimScaledArd (sqrt(d) lengthscale " +
+                            "prior), Matern32Iso (3-parameter isotropic), and SharedAddInterMatern32 (1D additive + " +
+                            "isotropic joint) improve calibration and accuracy on noisy human ratings and d >= 6 spaces."
+                        )
                     );
                 }
             }
@@ -1002,9 +1017,17 @@ namespace BayesianOptimization.Editor
             SerializedProperty cabopGroup = value.FindPropertyRelative("cabopGroup");
             SerializedProperty cabopTolerance = value.FindPropertyRelative("cabopTolerance");
             SerializedProperty cabopPrefabricatedValues = value.FindPropertyRelative("cabopPrefabricatedValues");
+            SerializedProperty gatedBy = value.FindPropertyRelative("gatedBy");
+            SerializedProperty gateThreshold = value.FindPropertyRelative("gateThreshold");
+            SerializedProperty gateNeutral = value.FindPropertyRelative("gateNeutral");
+            SerializedProperty gateSharpness = value.FindPropertyRelative("gateSharpness");
             bool showCabopFields = optimizerBackendProp != null &&
                                    (BoForUnityManager.OptimizerBackend)optimizerBackendProp.enumValueIndex ==
                                    BoForUnityManager.OptimizerBackend.CABOP;
+            bool showBoTorchGateFields = optimizerBackendProp != null &&
+                                         (BoForUnityManager.OptimizerBackend)optimizerBackendProp.enumValueIndex ==
+                                         BoForUnityManager.OptimizerBackend.BoTorch &&
+                                         (contextualOptimizationProp == null || !contextualOptimizationProp.boolValue);
 
             float padding = 1.5f;
             float singleLineHeight = EditorGUIUtility.singleLineHeight;
@@ -1030,6 +1053,24 @@ namespace BayesianOptimization.Editor
                 yOffset += fieldHeight;
                 EditorGUI.PropertyField(new Rect(rect.x, yOffset, rect.width, singleLineHeight), upperBound);
                 yOffset += fieldHeight;
+                if (showBoTorchGateFields && gatedBy != null)
+                {
+                    EditorGUI.PropertyField(
+                        new Rect(rect.x, yOffset, rect.width, singleLineHeight),
+                        gatedBy,
+                        new GUIContent("Gated By (Optional)")
+                    );
+                    yOffset += fieldHeight;
+                    if (!string.IsNullOrWhiteSpace(gatedBy.stringValue))
+                    {
+                        EditorGUI.PropertyField(new Rect(rect.x, yOffset, rect.width, singleLineHeight), gateThreshold);
+                        yOffset += fieldHeight;
+                        EditorGUI.PropertyField(new Rect(rect.x, yOffset, rect.width, singleLineHeight), gateNeutral);
+                        yOffset += fieldHeight;
+                        EditorGUI.PropertyField(new Rect(rect.x, yOffset, rect.width, singleLineHeight), gateSharpness);
+                        yOffset += fieldHeight;
+                    }
+                }
                 if (showCabopFields)
                 {
                     EditorGUI.PropertyField(new Rect(rect.x, yOffset, rect.width, singleLineHeight), cabopGroup);
@@ -1062,6 +1103,20 @@ namespace BayesianOptimization.Editor
             if (value.isExpanded)
             {
                 totalHeight += singleLineHeight * 3 + 1.5f * 3;
+                bool showBoTorchGateFields = optimizerBackendProp != null &&
+                                             (BoForUnityManager.OptimizerBackend)optimizerBackendProp.enumValueIndex ==
+                                             BoForUnityManager.OptimizerBackend.BoTorch &&
+                                             (contextualOptimizationProp == null || !contextualOptimizationProp.boolValue);
+                if (showBoTorchGateFields)
+                {
+                    SerializedProperty gatedBy = value.FindPropertyRelative("gatedBy");
+                    if (gatedBy != null)
+                    {
+                        totalHeight += singleLineHeight + 1.5f;
+                        if (!string.IsNullOrWhiteSpace(gatedBy.stringValue))
+                            totalHeight += (singleLineHeight + 1.5f) * 3;
+                    }
+                }
                 bool showCabopFields = optimizerBackendProp != null &&
                                        (BoForUnityManager.OptimizerBackend)optimizerBackendProp.enumValueIndex ==
                                        BoForUnityManager.OptimizerBackend.CABOP;
